@@ -1,50 +1,53 @@
-from azure.storage.blob import BlobServiceClient
-from azure.cognitiveservices.vision.customvision.prediction import CustomVisionPredictionClient
-from azure.servicebus import ServiceBusClient, ServiceBusMessage
+import logging
 import os
 import json
+from azure.cognitiveservices.vision.customvision.prediction import CustomVisionPredictionClient
+from msrest.authentication import ApiKeyCredentials
+from azure.servicebus import ServiceBusClient, ServiceBusMessage
 import azure.functions as func
 
-# Azure Blob Storage configuration
-BLOB_CONNECTION_STRING = os.getenv("BLOB_CONNECTION_STRING")
-BLOB_CONTAINER_NAME = os.getenv("BLOB_CONTAINER_NAME")
+app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION) 
 
-# Azure Custom Vision configuration
-CUSTOM_VISION_ENDPOINT = os.getenv("CUSTOM_VISION_ENDPOINT")
-CUSTOM_VISION_PROJECT_ID = os.getenv("CUSTOM_VISION_PROJECT_ID")
-CUSTOM_VISION_PREDICTION_KEY = os.getenv("CUSTOM_VISION_PREDICTION_KEY")
+@app.function_name(name="catdogclassifier") 
+@app.blob_trigger(
+    arg_name="myblob",
+    path=f"{os.getenv('BLOB_CONTAINER_NAME')}/{{name}}",
+    connection="AzureWebJobsStorage") 
+def catdogclassifier(myblob: func.InputStream): 
+    logging.info(f"Blob trigger function processed blob \n"
+                 f"Name: {myblob.name}\n" 
+                 f"Blob Size: {myblob.length} bytes") 
 
-# Azure Service Bus configuration
-SERVICE_BUS_CONNECTION_STRING = os.getenv("SERVICE_BUS_CONNECTION_STRING")
-SERVICE_BUS_TOPIC_NAME = os.getenv("SERVICE_BUS_TOPIC_NAME")
+    # Read image data from blob (works for jpg, png, etc.)
+    image_data = myblob.read()
 
-def main(req: func.HttpRequest) -> func.HttpResponse:
-    try:
-        # Get the uploaded file
-        file = req.files['file']
-        blob_service_client = BlobServiceClient.from_connection_string(BLOB_CONNECTION_STRING)
-        blob_client = blob_service_client.get_blob_client(container=BLOB_CONTAINER_NAME, blob=file.filename)
+    # Custom Vision configuration from environment
+    endpoint = os.getenv("CUSTOM_VISION_ENDPOINT")
+    project_id = os.getenv("CUSTOM_VISION_PROJECT_ID")  # Should be GUID only!
+    prediction_key = os.getenv("CUSTOM_VISION_PREDICTION_KEY")
+    iteration_name = os.getenv("CUSTOM_VISION_ITERATION_NAME")  # Optional: set in settings
 
-        # Upload the image to Blob Storage
-        blob_client.upload_blob(file.stream, overwrite=True)
+    # Authenticate and predict
+    credentials = ApiKeyCredentials(in_headers={"Prediction-key": prediction_key})
+    prediction_client = CustomVisionPredictionClient(endpoint, credentials)
+    results = prediction_client.classify_image(
+        project_id, iteration_name, image_data
+    )
 
-        # Classify the image using Azure Custom Vision
-        prediction_client = CustomVisionPredictionClient(CUSTOM_VISION_ENDPOINT, CUSTOM_VISION_PREDICTION_KEY)
-        with open(file.stream, "rb") as image_data:
-            results = prediction_client.classify_image(CUSTOM_VISION_PROJECT_ID, "Iteration1", image_data)
+    # Find the top prediction (cat or dog)
+    top_prediction = max(results.predictions, key=lambda x: x.probability)
+    result = {
+        "blob_name": myblob.name,
+        "prediction": top_prediction.tag_name,
+        "probability": top_prediction.probability
+    }
 
-        # Prepare the classification result
-        classification_result = {tag.name: tag.probability for tag in results.predictions}
-        
-        # Send the result to Service Bus
-        service_bus_client = ServiceBusClient.from_connection_string(SERVICE_BUS_CONNECTION_STRING)
-        with service_bus_client:
-            sender = service_bus_client.get_topic_sender(SERVICE_BUS_TOPIC_NAME)
-            with sender:
-                message = ServiceBusMessage(json.dumps(classification_result))
-                sender.send_messages(message)
-
-        return func.HttpResponse("Image uploaded and classified successfully.", status_code=200)
-
-    except Exception as e:
-        return func.HttpResponse(f"An error occurred: {str(e)}", status_code=500)
+    # Send result to Service Bus
+    servicebus_conn_str = os.getenv("SERVICE_BUS_CONNECTION_STRING")
+    topic_name = os.getenv("SERVICE_BUS_TOPIC_NAME")
+    with ServiceBusClient.from_connection_string(servicebus_conn_str) as client:
+        sender = client.get_topic_sender(topic_name)
+        with sender:
+            message = ServiceBusMessage(json.dumps(result))
+            sender.send_messages(message)
+    logging.info("Classification result sent to Service Bus.")
