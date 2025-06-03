@@ -3,7 +3,6 @@
   "Values": {
     "AzureWebJobsStorage": "DefaultEndpointsProtocol=https;AccountName=imageclassificationblob;AccountKey=wWz661umBDyH9jqhVLVjYVmSBjFJIa9rW/mcotIbZjNb8oaErllTy3ME8HX26/v5MSijkEsd88Ow+AStitGApg==;EndpointSuffix=core.windows.net",
     "FUNCTIONS_WORKER_RUNTIME": "python",
-    "BLOB_CONTAINER_NAME": "imageblob",
     "CUSTOM_VISION_ENDPOINT": "https://catsvsdogsmodel.cognitiveservices.azure.com/",
     "CUSTOM_VISION_PROJECT_ID": "4d9c5729-b3b6-4570-9c4e-6831c3f4fb41",
     "CUSTOM_VISION_PREDICTION_KEY": "CA3k8pBmKAaegWKwxgfTmtJr6uGLc18InnrsSyMTxOidCGc7bVMnJQQJ99BFACYeBjFXJ3w3AAAJACOG2gwO",

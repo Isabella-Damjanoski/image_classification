@@ -11,12 +11,14 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
 @app.function_name(name="catdogclassifier") 
 @app.blob_trigger(
     arg_name="myblob",
-    path=f"{os.getenv('BLOB_CONTAINER_NAME')}/{{name}}",
+    path="imageblob/{name}",
     connection="AzureWebJobsStorage") 
 def catdogclassifier(myblob: func.InputStream): 
     logging.info(f"Blob trigger function processed blob \n"
                  f"Name: {myblob.name}\n" 
                  f"Blob Size: {myblob.length} bytes") 
+
+    logging.info("Function triggered by blob upload.")
 
     # Read image data from blob (works for jpg, png, etc.)
     image_data = myblob.read()
@@ -50,4 +52,5 @@ def catdogclassifier(myblob: func.InputStream):
         with sender:
             message = ServiceBusMessage(json.dumps(result))
             sender.send_messages(message)
+            
     logging.info("Classification result sent to Service Bus.")
