@@ -5,6 +5,8 @@ from azure.cognitiveservices.vision.customvision.prediction import CustomVisionP
 from msrest.authentication import ApiKeyCredentials
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
 import azure.functions as func
+from dotenv import load_dotenv
+load_dotenv()
 
 app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION) 
 
