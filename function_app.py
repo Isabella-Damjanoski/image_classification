@@ -1,6 +1,7 @@
 import logging
 import os
 import json
+import time
 from azure.cognitiveservices.vision.customvision.prediction import CustomVisionPredictionClient
 from msrest.authentication import ApiKeyCredentials
 from azure.servicebus import ServiceBusClient, ServiceBusMessage
@@ -17,8 +18,8 @@ app = func.FunctionApp(http_auth_level=func.AuthLevel.FUNCTION)
     connection="AzureWebJobsStorage") 
 def catdogclassifier(myblob: func.InputStream): 
     logging.info(f"Blob trigger function processed blob \n"
-                 f"Name: {myblob.name}\n" 
-                 f"Blob Size: {myblob.length} bytes") 
+                f"Name: {myblob.name}\n" 
+                f"Blob Size: {myblob.length} bytes") 
 
     logging.info("Function triggered by blob upload.")
 
@@ -30,16 +31,19 @@ def catdogclassifier(myblob: func.InputStream):
     project_id = os.getenv("CUSTOM_VISION_PROJECT_ID")  # Should be GUID only!
     prediction_key = os.getenv("CUSTOM_VISION_PREDICTION_KEY")
     iteration_name = os.getenv("CUSTOM_VISION_ITERATION_NAME")  # Optional: set in settings
+    logging.info(f"endpoint is {endpoint}")
+    logging.info(f"project id is {project_id}")
+    logging.info(f"prediction key is {prediction_key}")
+    logging.info(f"iteration name is {iteration_name}")
 
     # Authenticate and predict
-    credentials = ApiKeyCredentials(in_headers={"Prediction-key": prediction_key})
+    credentials = ApiKeyCredentials(in_headers={"Prediction-Key": prediction_key})
     prediction_client = CustomVisionPredictionClient(endpoint, credentials)
-    results = prediction_client.classify_image(
-        project_id, iteration_name, image_data
-    )
+    results = prediction_client.classify_image(project_id, iteration_name, image_data, application=None, custom_headers=None, raw=False)
 
     # Find the top prediction (cat or dog)
     top_prediction = max(results.predictions, key=lambda x: x.probability)
+    
     result = {
         "blob_name": myblob.name,
         "prediction": top_prediction.tag_name,
